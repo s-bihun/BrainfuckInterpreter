@@ -1,31 +1,12 @@
-using System.Text;
-using System.Collections.Generic;
-using System.IO;
 namespace BrainfuckInterpreter;
 
 /// <summary>
 /// Optimized interpreter for the Brainfuck programs.
 /// Interpret calls from different threads are not supported.
 /// </summary>
-public class BrainfuckOptimizedInterpreter : IBrainfuckInterpreter {
-    #region Constants
-
-    private const char GoRightCommand = '>';
-    private const char GoLeftCommand = '<';
-    private const char IncrementCommand = '+';   
-    private const char DecrementCommand = '-';
-    private const char OutputCommand = '.';
-    private const char InputCommand = ',';
-    private const char LoopStartCommand = '[';
-    private const char LoopEndCommand = ']';
-	private const char DefaultCellContent = (char)0;
-    private const char LineCommentStartExtensionCommand = ';';
-	private readonly char[] AllCommands = new [] { GoRightCommand, GoLeftCommand, IncrementCommand, DecrementCommand, OutputCommand, InputCommand, LoopStartCommand, LoopEndCommand };
-
-    #endregion
-
+public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
 	/// <inheritdoc/>
-    public void Interpret(string programCode, StreamReader input, StreamWriter output) {
+    public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
 		var foundLoopStartPositions = new List<int>();
 		var currentLoopStartPosition = -1;
         var foundGoToPositions = new Dictionary<int, int>();
@@ -95,25 +76,6 @@ public class BrainfuckOptimizedInterpreter : IBrainfuckInterpreter {
 			}
 			position++;
 		}
-	}
-
-	/// <summary>
-	/// Strip a Brainfuck program from comments and unsupported symbols.
-	/// </summary>
-	/// <param name="programCode">Code of a Brainfuck program to strip.</param>
-	/// <returns>Stripped program.</returns>
-	public string Strip(string programCode) {
-		var strippedProgram = new StringBuilder();
-		for(int i = 0; i < programCode.Length; i++) {
-			if (programCode[i] == LineCommentStartExtensionCommand) {
-				do {
-					i++;
-				} while (i < programCode.Length && programCode[i] != '\n');
-				continue;
-			}
-			if (AllCommands.Contains(programCode[i])) strippedProgram.Append(programCode[i]);
-		}
-		return strippedProgram.ToString();
 	}
 	
 	private static int FindNextCommandAfterLoopPosition(string code, int position) {

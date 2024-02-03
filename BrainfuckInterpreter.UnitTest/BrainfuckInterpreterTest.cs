@@ -1,5 +1,4 @@
-using System.IO;
-using System.Text;
+global using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace BrainfuckInterpreter.UnitTest;
 
