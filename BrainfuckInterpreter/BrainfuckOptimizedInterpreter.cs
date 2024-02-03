@@ -5,30 +5,36 @@ namespace BrainfuckInterpreter;
 /// Interpret calls from different threads are not supported.
 /// </summary>
 public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
+    #region Constants
+
+    private const int ExpectedEnclosedLoopNumber = 255;
+    private const int ExpectedLoopNumber = 255;
+    private const int AvailableMemoryCellsCount = 10240;
+
+    #endregion
+
     /// <inheritdoc/>
     public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
-        var foundLoopStartPositions = new List<int>();
+        var encounteredLoopStarts = new List<int>(ExpectedEnclosedLoopNumber);
         var currentLoopStartPosition = -1;
-        var foundGoToPositions = new Dictionary<int, int>();
-
-        var memoryCells = new List<char>() { DefaultCellContent };
+        var goToPositionsCache = new Dictionary<int, int>(2 * ExpectedLoopNumber);
+        
+        var programPos = 0;
+        var memoryCells = Enumerable.Repeat(DefaultCellContent, AvailableMemoryCellsCount).ToList();
         int currentCell = 0;
-        var position = 0;
-        while (position < programCode.Length) {
-            switch (programCode[position]) {
+        while (programPos < programCode.Length) {
+            switch (programCode[programPos]) {
                 case GoRightCommand:
                     currentCell++;
-                    if (memoryCells.Count < (currentCell + 1)) memoryCells.Add(DefaultCellContent);
                     break;
                 case GoLeftCommand:
                     currentCell--;
-                    //if (currentCell < 0) throw new InvalidOperationException("Invalid program. Memory cell with index less then zero is referenced.");
                     break;
                 case IncrementCommand:
                     memoryCells[currentCell]++;
                     break;
                 case DecrementCommand:
-                    memoryCells[currentCell]--;
+                    memoryCells[currentCell]--; 
                     break;
                 case OutputCommand:
                     output.WriteAsync(memoryCells[currentCell]);
@@ -38,43 +44,41 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
                     break;
                 case LoopStartCommand:
                     if (memoryCells[currentCell] == 0) {
-                        if (foundGoToPositions.TryGetValue(position, out var newPosition)) {
-                            position = newPosition;
+                        if (goToPositionsCache.TryGetValue(programPos, out var newPosition)) {
+                            programPos = newPosition;
                         }
                         else {
-                            var oldPosition = position;
-                            position = FindNextCommandAfterLoopPosition(programCode, position);
-                            foundGoToPositions.Add(oldPosition, position);
+                            var oldPosition = programPos;
+                            programPos = FindNextCommandAfterLoopPosition(programCode, programPos);
+                            goToPositionsCache.Add(oldPosition, programPos);
                         }
                         continue;
                     }
                     else {
                         currentLoopStartPosition++;
-                        if (foundLoopStartPositions.Count <= currentLoopStartPosition) {
-                            foundLoopStartPositions.Add(position);
+                        if (encounteredLoopStarts.Count <= currentLoopStartPosition) {
+                            encounteredLoopStarts.Add(programPos);
                         }
                         else {
-                            foundLoopStartPositions[currentLoopStartPosition] = position;
+                            encounteredLoopStarts[currentLoopStartPosition] = programPos;
                         }
                     }
                     break;
                 case LoopEndCommand:
                     if (memoryCells[currentCell] != 0) {
-                        if (foundGoToPositions.TryGetValue(position, out var newPosition)) {
-                            position = newPosition;
+                        if (goToPositionsCache.TryGetValue(programPos, out var newPosition)) {
+                            programPos = newPosition;
                         }
                         else {
-                            var oldPosition = position;
-                            position = foundLoopStartPositions[currentLoopStartPosition--] + 1;
-                            foundGoToPositions.Add(oldPosition, position);
+                            var oldPosition = programPos;
+                            programPos = encounteredLoopStarts[currentLoopStartPosition--] + 1;
+                            goToPositionsCache.Add(oldPosition, programPos);
                         }
                         continue;
                     }
                     break;
-                // default:
-                //  throw new InvalidOperationException($"Command code[{position}] = \"{programCode[position]}\" is not defined.");
             }
-            position++;
+            programPos++;
         }
     }
     
