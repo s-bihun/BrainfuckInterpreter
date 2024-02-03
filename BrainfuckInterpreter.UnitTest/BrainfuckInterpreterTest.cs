@@ -30,9 +30,9 @@ public class BrainfuckInterpreterTest
     public void ShitHappensTest()
     {
         var program = "++++++++++[>+++>++++++++>++++++++++<<<-]" +
-			">>+++.>++++.+.+++++++++++." +
-			"<<++." +
-			">-----------.>-------------------.+++++++++++++++..-----------.+++++++++.+++++.";
+            ">>+++.>++++.+.+++++++++++." +
+            "<<++." +
+            ">-----------.>-------------------.+++++++++++++++..-----------.+++++++++.+++++.";
         var intpuStream = new StreamReader(new MemoryStream());
         var memoryStream = new MemoryStream(12);
         var outputStream = new StreamWriter(memoryStream);
@@ -46,8 +46,8 @@ public class BrainfuckInterpreterTest
     public void FunnyTest()
     {
         var program = ">++++++++++[>++++++++++>++++++++++++>+++++++++++<<<-]" +
-			">++>--->>+><<<<<" +
-			">.>.>..<++++.";
+            ">++>--->>+><<<<<" +
+            ">.>.>..<++++.";
         var intpuStream = new StreamReader(new MemoryStream());
         var memoryStream = new MemoryStream(12);
         var outputStream = new StreamWriter(memoryStream);
