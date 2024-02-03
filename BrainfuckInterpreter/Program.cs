@@ -4,7 +4,7 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        args = [@"..\..\..\..\BrainfuckPrograms\HelloWorld.bf", "-d"];
+        // args = [@"..\..\..\..\BrainfuckPrograms\HelloWorld.bf", "-d"];
         if (args.Length < 1) throw new InvalidOperationException("Brainfuck program file should be passed as a second argument.");
         string brainfuckProgramFilePath = args[0];
         bool isDebugMode = args.Length == 2 && args[1] == "-d";
