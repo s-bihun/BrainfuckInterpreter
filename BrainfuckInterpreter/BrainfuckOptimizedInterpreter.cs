@@ -7,20 +7,20 @@ namespace BrainfuckInterpreter;
 public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
     #region Constants
 
-    private const int ExpectedEnclosedLoopNumber = 255;
-    private const int ExpectedLoopNumber = 255;
-    private const int AvailableMemoryCellsCount = 10240;
+    private const int ExpectedLoopNumber = 10000;
+    private const int MaximumProgramLength = 30000;
+    private const int AvailableMemoryCellsCount = 30000;
 
     #endregion
 
     /// <inheritdoc/>
     public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
-        var encounteredLoopStarts = new List<int>(ExpectedEnclosedLoopNumber);
+        var encounteredLoopStarts = new int[ExpectedLoopNumber];
         var currentLoopStartPosition = -1;
-        var goToPositionsCache = new Dictionary<int, int>(2 * ExpectedLoopNumber);
+        var goToPositionsCache = new int[MaximumProgramLength]; // 0 means no link, all values are shifted upwards by 1
         
         var programPos = 0;
-        var memoryCells = Enumerable.Repeat(DefaultCellContent, AvailableMemoryCellsCount).ToList();
+        var memoryCells = new byte[AvailableMemoryCellsCount];
         int currentCell = 0;
         while (programPos < programCode.Length) {
             switch (programCode[programPos]) {
@@ -37,46 +37,39 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
                     memoryCells[currentCell]--; 
                     break;
                 case OutputCommand:
-                    output.Write(memoryCells[currentCell]);
+                    output.Write((char)memoryCells[currentCell]);
                     break;
                 case InputCommand:
-                    memoryCells[currentCell] = (char)input.Read();
+                    memoryCells[currentCell] = (byte)input.Read();
                     break;
                 case LoopStartCommand:
                     if (memoryCells[currentCell] == 0) {
-                        if (goToPositionsCache.TryGetValue(programPos, out var newPosition)) {
-                            programPos = newPosition;
+                        var loopEndPosition = goToPositionsCache[programPos] - 1;
+                        if (loopEndPosition < 0) {
+                            loopEndPosition = FindNextCommandAfterLoopPositionShifted(programCode, programPos);
+                            goToPositionsCache[programPos] = loopEndPosition + 1;
+                            goToPositionsCache[loopEndPosition] = programPos + 1;
                         }
-                        else {
-                            var oldPosition = programPos;
-                            programPos = FindNextCommandAfterLoopPosition(programCode, programPos);
-                            goToPositionsCache.Add(oldPosition, programPos);
-                        }
-                        continue;
+                        programPos = loopEndPosition - 1;
                     }
                     else {
                         currentLoopStartPosition++;
-                        if (encounteredLoopStarts.Count <= currentLoopStartPosition) {
-                            encounteredLoopStarts.Add(programPos);
-                        }
-                        else {
-                            encounteredLoopStarts[currentLoopStartPosition] = programPos;
-                        }
+                        encounteredLoopStarts[currentLoopStartPosition] = programPos;
                     }
-                    break;
+                    programPos++;
+                    continue;
                 case LoopEndCommand:
-                    if (memoryCells[currentCell] != 0) {
-                        if (goToPositionsCache.TryGetValue(programPos, out var newPosition)) {
-                            programPos = newPosition;
-                        }
-                        else {
-                            var oldPosition = programPos;
-                            programPos = encounteredLoopStarts[currentLoopStartPosition--] + 1;
-                            goToPositionsCache.Add(oldPosition, programPos);
-                        }
-                        continue;
+                    var loopStartPosition = goToPositionsCache[programPos] - 1;
+                    if (loopStartPosition < 0) {
+                        loopStartPosition = encounteredLoopStarts[currentLoopStartPosition--];
+                        goToPositionsCache[programPos] = loopStartPosition + 1;
+                        goToPositionsCache[loopStartPosition] = programPos + 1;
                     }
-                    break;
+                    if (memoryCells[currentCell] != 0) {
+                        programPos = loopStartPosition;
+                    }
+                    programPos++;
+                    continue;
             }
             programPos++;
         }
@@ -88,13 +81,12 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
     /// <param name="code">Brainfuck code.</param>
     /// <param name="position">Current position (expected start of the loop).</param>
     /// <returns>Position of the next command after the loop.</returns>
-    private static int FindNextCommandAfterLoopPosition(string code, int position) {
+    private static int FindNextCommandAfterLoopPositionShifted(string code, int position) {
         var matchingBracket = LoopEndCommand;
         var opposingBracket = LoopStartCommand;
         int counter = 1;
         do {
             position++;
-            //if (position < 0) throw new InvalidOperationException("Program is invalid. Loop is closed but no starting point.");
             if (code[position] == opposingBracket) { counter++; continue; }
             if (code[position] == matchingBracket) counter--;
         } while (!(counter == 0 && code[position] == matchingBracket));

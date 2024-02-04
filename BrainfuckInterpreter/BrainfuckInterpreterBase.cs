@@ -16,7 +16,7 @@ public abstract class BrainfuckInterpreterBase {
     protected const char InputCommand = ',';
     protected const char LoopStartCommand = '[';
     protected const char LoopEndCommand = ']';
-    protected const char DefaultCellContent = (char)0;
+    protected const byte DefaultCellContent = 0;
     protected const char LineCommentStartExtensionCommand = ';';
     protected const char NewLineChar = '\n';
     protected readonly char[] AllCommands = [GoRightCommand, GoLeftCommand, IncrementCommand, DecrementCommand, OutputCommand, InputCommand, LoopStartCommand, LoopEndCommand];
