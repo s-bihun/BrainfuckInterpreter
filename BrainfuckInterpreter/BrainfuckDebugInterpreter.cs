@@ -3,7 +3,13 @@ using System.Text.RegularExpressions;
 
 namespace BrainfuckInterpreter;
 
+/// <summary>
+/// Brainfuck interpreter supporting comments, brakepoints and debug outputs.
+/// Supports only single-threaded usage.
+/// </summary>
 public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
+    #region Regexes
+
     private static readonly Regex StopDebuggingRegex = new Regex(@"\{STOP_DEBUGGING\}");
     private static readonly Regex StopDebuggingParametrizedRegex = new Regex(@"\{STOP_DEBUGGING\(CELL\[(\d+)\]==(\d+)\)\}");
     private static readonly Regex StartDebuggingRegex = new Regex(@"\{START_DEBUGGING\}");
@@ -11,95 +17,113 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
     private static readonly Regex BreakRegex = new Regex(@"\{BREAK\}");
     private static readonly Regex BreakParametrizedRegex = new Regex(@"\{BREAK\(CELL\[(\d+)\]==(\d+)\)\}");
 
+    #endregion
+
+    #region Private Fields
+
+    private string? StrippedCode;
+    private bool IsWriteDebug;
+    private List<char>? MemoryCells;
+    private int CurrentCell;
+    private int Position;
+    private StreamReader? Input;
+    private StreamWriter? Output;
+    private Dictionary<int, Tuple<int, int>>? PosToLnCol;
+    private Dictionary<int, string>? CommentsByLn;
+
+    #endregion
+
     /// <inheritdoc/>
     public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
+        Input = input;
+        Output = output;
         var programOutput = new StringBuilder();
-        programCode = Strip(programCode, out var posToLnCol, out var commentsByLn);
+        StrippedCode = Strip(programCode, out PosToLnCol, out CommentsByLn);
         var foundLoopStartPositions = new List<int>();
         var currentLoopStartPosition = -1;
         var foundGoToPositions = new Dictionary<int, int>();
 
-        var isWriteDebug = true;
-        var memoryCells = new List<char>() { DefaultCellContent };
-        var currentCell = 0;
+        IsWriteDebug = true;
+        MemoryCells = new List<char>() { DefaultCellContent };
+        CurrentCell = 0;
+        Position = 0;
         var previousPosition = -1;
-        var position = 0;
-        while (position < programCode.Length) {
-            if ((previousPosition < 0 && posToLnCol[position].Item1 != 0) || (posToLnCol[previousPosition].Item1 != posToLnCol[position].Item1)) {
-                WriteComments(ref isWriteDebug, input, output, commentsByLn, memoryCells, currentCell, previousPosition < 0 ? 0 : posToLnCol[previousPosition].Item1, posToLnCol[position].Item1);
+        while (Position < StrippedCode.Length) {
+            if ((previousPosition < 0 && PosToLnCol[Position].Item1 != 0) || (PosToLnCol[previousPosition].Item1 != PosToLnCol[Position].Item1)) {
+                WriteCommentsForLines(previousPosition < 0 ? 0 : PosToLnCol[previousPosition].Item1, PosToLnCol[Position].Item1);
             }
-            previousPosition = position;
+            previousPosition = Position;
 
-            switch (programCode[position]) {
+            switch (StrippedCode[Position]) {
                 case GoRightCommand:
-                    currentCell++;
-                    if (memoryCells.Count < (currentCell + 1)) memoryCells.Add(DefaultCellContent);
+                    CurrentCell++;
+                    if (MemoryCells.Count < (CurrentCell + 1)) MemoryCells.Add(DefaultCellContent);
                     break;
                 case GoLeftCommand:
-                    currentCell--;
-                    if (currentCell < 0) throw new InvalidOperationException("Invalid program. Memory cell with index less then zero is referenced.");
+                    CurrentCell--;
+                    if (CurrentCell < 0) throw new InvalidOperationException("Invalid program. Memory cell with index less then zero is referenced.");
                     break;
                 case IncrementCommand:
-                    memoryCells[currentCell]++;
+                    MemoryCells[CurrentCell]++;
                     break;
                 case DecrementCommand:
-                    memoryCells[currentCell]--;
+                    MemoryCells[CurrentCell]--;
                     break;
                 case OutputCommand:
-                    programOutput.Append(memoryCells[currentCell]);
+                    programOutput.Append(MemoryCells[CurrentCell]);
                     break;
                 case InputCommand:
-                    memoryCells[currentCell] = (char)input.Read();
+                    MemoryCells[CurrentCell] = (char)Input.Read();
                     break;
                 case LoopStartCommand:
-                    WriteDebug(isWriteDebug, output, programCode, position, posToLnCol, memoryCells, currentCell);
-                    if (memoryCells[currentCell] == 0) {
-                        if (foundGoToPositions.TryGetValue(position, out var newPosition)) {
-                            position = newPosition;
+                    WriteDebugMessage();
+                    if (MemoryCells[CurrentCell] == 0) {
+                        if (foundGoToPositions.TryGetValue(Position, out var newPosition)) {
+                            Position = newPosition;
                         }
                         else {
-                            var oldPosition = position;
-                            position = FindEndOfLoopPosition(programCode, position);
-                            foundGoToPositions.Add(oldPosition, position);
+                            var oldPosition = Position;
+                            Position = FindEndOfLoopPosition(StrippedCode, Position);
+                            foundGoToPositions.Add(oldPosition, Position);
                         }
-                        previousPosition = position;
+                        previousPosition = Position;
                     }
                     else {
                         currentLoopStartPosition++;
                         if (foundLoopStartPositions.Count <= currentLoopStartPosition) {
-                            foundLoopStartPositions.Add(position);
+                            foundLoopStartPositions.Add(Position);
                         }
                         else {
-                            foundLoopStartPositions[currentLoopStartPosition] = position;
+                            foundLoopStartPositions[currentLoopStartPosition] = Position;
                         }
                     }
-                    position++;
+                    Position++;
                     continue;
                 case LoopEndCommand:
-                    WriteDebug(isWriteDebug, output, programCode, position, posToLnCol, memoryCells, currentCell);
-                    if (memoryCells[currentCell] != 0) {
-                        if (foundGoToPositions.TryGetValue(position, out var newPosition)) {
-                            position = newPosition;
+                    WriteDebugMessage();
+                    if (MemoryCells[CurrentCell] != 0) {
+                        if (foundGoToPositions.TryGetValue(Position, out var newPosition)) {
+                            Position = newPosition;
                         }
                         else {
-                            var oldPosition = position;
-                            position = foundLoopStartPositions[currentLoopStartPosition--];
-                            foundGoToPositions.Add(oldPosition, position);
+                            var oldPosition = Position;
+                            Position = foundLoopStartPositions[currentLoopStartPosition--];
+                            foundGoToPositions.Add(oldPosition, Position);
                         }
-                        previousPosition = position;
+                        previousPosition = Position;
                     }
-                    position++;
+                    Position++;
                     continue;
                 default:
-                    throw new InvalidOperationException($"Command code[{position}] = \"{programCode[position]}\" is not defined.");
+                    throw new InvalidOperationException($"Command code[{Position}] = \"{StrippedCode[Position]}\" is not defined.");
             }
-            WriteDebug(isWriteDebug, output, programCode, position, posToLnCol, memoryCells, currentCell);
-            position++;
+            WriteDebugMessage();
+            Position++;
         }
-        WriteComments(ref isWriteDebug, input, output, commentsByLn, memoryCells, currentCell, posToLnCol[previousPosition].Item1, commentsByLn.Keys.Max() + 1);
-        output.WriteLine();
-        output.WriteLine("Program output:");
-        output.WriteLine(programOutput.ToString());
+        WriteCommentsForLines(PosToLnCol[previousPosition].Item1, CommentsByLn.Keys.Max() + 1);
+        Output.WriteLine();
+        Output.WriteLine("Program output:");
+        Output.WriteLine(programOutput.ToString());
     }
 
     private static char ConvertToPrintable(char c) => c < 32 || c == 255 ? '' : c;
@@ -117,41 +141,52 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         return position;
     }
     
-    private static void WriteDebug(bool isWriteDebug, StreamWriter output, string programCode, int position, Dictionary<int, Tuple<int, int>> posToLnCol, IList<char> memoryCells, int currentCell) {
-        if (isWriteDebug) output.WriteLine($"code[{posToLnCol[position].Item1, 3}, {posToLnCol[position].Item2, 3}]: {programCode[position]} | cell[{currentCell,3}] = {(int)memoryCells[currentCell],5} ({ConvertToPrintable(memoryCells[currentCell])})");
+    private void WriteDebugMessage() {
+        if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
+        if (PosToLnCol == null) throw new InvalidOperationException($"{nameof(PosToLnCol)} can't be null.");
+        if (StrippedCode == null) throw new InvalidOperationException($"{nameof(StrippedCode)} can't be null.");
+        if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
+
+        if (IsWriteDebug) Output.WriteLine($"code[{PosToLnCol[Position].Item1, 3}, {PosToLnCol[Position].Item2, 3}]: {StrippedCode[Position]} | cell[{CurrentCell,3}] = {(int)MemoryCells[CurrentCell],5} ({ConvertToPrintable(MemoryCells[CurrentCell])})");
     }
 
-    private static IList<string> GetComments(Dictionary<int, string> commentsByLn, int fromLn, int toLn) {
+    private IList<string> GetComments(int fromLn, int toLn) {
+        if (CommentsByLn == null) throw new InvalidOperationException($"{nameof(CommentsByLn)} can't be null.");
+
         var printedComments = new List<string>();
         for (var i = fromLn; i < toLn; i++) {
-            if (commentsByLn.TryGetValue(i, out var comment)) {
+            if (CommentsByLn.TryGetValue(i, out var comment)) {
                 printedComments.Add(comment);
             }
         }
         return printedComments;
     }
 
-    private static void WriteComments(ref bool isWriteDebug, StreamReader input, StreamWriter output, Dictionary<int, string> commentsByLn, IList<char> memoryCells, int currentCell, int fromLn, int toLn) {
-        var commentsToWrite = GetComments(commentsByLn, fromLn, toLn);
+    private void WriteCommentsForLines(int fromLn, int toLn) {
+        if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
+        if (Input == null) throw new InvalidOperationException($"{nameof(Input)} can't be null.");
+        if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
+
+        var commentsToWrite = GetComments(fromLn, toLn);
         foreach (var comment in commentsToWrite) {
             var lastStartDebuggingPos = -1;
             var lastStopDebuggingPos = -1;
             if (StartDebuggingRegex.IsMatch(comment)) {
                 lastStartDebuggingPos = StartDebuggingRegex.Matches(comment).Max(x => x.Captures.Max(y => y.Index));
-                isWriteDebug = true;
+                IsWriteDebug = true;
             }
             if (StartDebuggingParametrizedRegex.IsMatch(comment)) {                
                 var matches = StartDebuggingParametrizedRegex.Matches(comment);
                 foreach (Match match in matches) {
                     var cellToCheck = int.Parse(match.Groups[1].Value);
                     var expectedValue = int.Parse(match.Groups[2].Value);
-                    if (memoryCells.Count > cellToCheck && memoryCells[cellToCheck] == expectedValue) {
+                    if (MemoryCells.Count > cellToCheck && MemoryCells[cellToCheck] == expectedValue) {
                         lastStartDebuggingPos = Math.Max(lastStartDebuggingPos, match.Captures.Max(y => y.Index));
-                        isWriteDebug = true;
+                        IsWriteDebug = true;
                     }
                 }
             }
-            WriteComment(isWriteDebug, output, comment, memoryCells, currentCell);
+            WriteComment(comment);
             if (StopDebuggingRegex.IsMatch(comment)) {
                 lastStopDebuggingPos = StopDebuggingRegex.Matches(comment).Max(x => x.Captures.Max(y => y.Index));
             }
@@ -160,44 +195,49 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
                 foreach (Match match in matches) {
                     var cellToCheck = int.Parse(match.Groups[1].Value);
                     var expectedValue = int.Parse(match.Groups[2].Value);
-                    if (memoryCells.Count > cellToCheck && memoryCells[cellToCheck] == expectedValue) {
+                    if (MemoryCells.Count > cellToCheck && MemoryCells[cellToCheck] == expectedValue) {
                         lastStopDebuggingPos = Math.Max(lastStopDebuggingPos, match.Captures.Max(y => y.Index));
                     }
                 }
             }
             if (lastStartDebuggingPos > lastStopDebuggingPos) {
-                isWriteDebug = true;
+                IsWriteDebug = true;
             }
             else if (lastStartDebuggingPos < lastStopDebuggingPos) {
-                isWriteDebug = false;
+                IsWriteDebug = false;
             }
             if (BreakRegex.IsMatch(comment)) {
-                output.WriteLine("Breakpoint is met. Press enter to continue execution...");
-                output.Flush();
-                input.ReadLine();
+                Output.WriteLine("Breakpoint is met. Press enter to continue execution...");
+                Output.Flush();
+                Input.ReadLine();
             }
             else if (BreakParametrizedRegex.IsMatch(comment)) {
                 var match = BreakParametrizedRegex.Match(comment);
                 var cellToCheck = int.Parse(match.Groups[1].Value);
                 var expectedValue = int.Parse(match.Groups[2].Value);
-                if (memoryCells.Count > cellToCheck && memoryCells[cellToCheck] == expectedValue) {
-                    output.WriteLine($"Customized breakpoint {match.Groups[0]} is met. Press enter to continue execution...");
-                    output.Flush();
-                    input.ReadLine();
+                if (MemoryCells.Count > cellToCheck && MemoryCells[cellToCheck] == expectedValue) {
+                    Output.WriteLine($"Customized breakpoint {match.Groups[0]} is met. Press enter to continue execution...");
+                    Output.Flush();
+                    Input.ReadLine();
                 }
             }
         }
     }
 
-    private static void WriteComment(bool isWriteDebug, StreamWriter output, string comment, IList<char> memoryCells, int currentCell) {
-        if (isWriteDebug) output.WriteLine($"{comment}");
-        WriteMemoryCells(isWriteDebug, output, memoryCells, currentCell);
+    private void WriteComment(string comment) {
+        if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
+
+        if (IsWriteDebug) Output.WriteLine($"{comment}");
+        WriteMemoryCells();
     }
 
-    private static void WriteMemoryCells(bool isWriteDebug, StreamWriter output, IList<char> memoryCells, int currentCell) {
-        if (!isWriteDebug) return;
-        output.WriteLine($"|{string.Join("|", Enumerable.Range(0, memoryCells.Count).Select(x => x == currentCell ? @"\\/\/\/" : "       "))}|");
-        output.WriteLine($"| {string.Join(" | ", memoryCells.Select(x => $"{(int)x,5}"))} |");
-        output.WriteLine($"|   {string.Join("   |   ", memoryCells.Select(ConvertToPrintable))}   |");
+    private void WriteMemoryCells() {
+        if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
+        if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
+
+        if (!IsWriteDebug) return;
+        Output.WriteLine($"|{string.Join("|", Enumerable.Range(0, MemoryCells.Count).Select(x => x == CurrentCell ? @"\\/\/\/" : "       "))}|");
+        Output.WriteLine($"| {string.Join(" | ", MemoryCells.Select(x => $"{(int)x,5}"))} |");
+        Output.WriteLine($"|   {string.Join("   |   ", MemoryCells.Select(ConvertToPrintable))}   |");
     }
 }
