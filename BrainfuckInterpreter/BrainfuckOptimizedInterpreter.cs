@@ -2,7 +2,7 @@ namespace BrainfuckInterpreter;
 
 /// <summary>
 /// Optimized interpreter for the Brainfuck programs.
-/// Interpret calls from different threads are not supported.
+/// Supports multy-thread usage.
 /// </summary>
 public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
     #region Constants
@@ -37,7 +37,7 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
                     memoryCells[currentCell]--; 
                     break;
                 case OutputCommand:
-                    output.WriteAsync(memoryCells[currentCell]);
+                    output.Write(memoryCells[currentCell]);
                     break;
                 case InputCommand:
                     memoryCells[currentCell] = (char)input.Read();
