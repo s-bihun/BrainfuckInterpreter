@@ -17,7 +17,7 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
     public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
         var encounteredLoopStarts = new int[ExpectedLoopNumber];
         var currentLoopStartPosition = -1;
-        var goToPositionsCache = new int[MaximumProgramLength]; // 0 means no link, all values are shifted upwards by 1
+        var goToPositionsCache = Enumerable.Repeat(-1, MaximumProgramLength).ToArray();
         
         var programPos = 0;
         var memoryCells = new byte[AvailableMemoryCellsCount];
@@ -44,33 +44,31 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
                     break;
                 case LoopStartCommand:
                     if (memoryCells[currentCell] == 0) {
-                        var loopEndPosition = goToPositionsCache[programPos] - 1;
+                        var loopEndPosition = goToPositionsCache[programPos];
                         if (loopEndPosition < 0) {
                             loopEndPosition = FindLoopEndPosition(programCode, programPos);
-                            goToPositionsCache[programPos] = loopEndPosition + 1;
-                            goToPositionsCache[loopEndPosition] = programPos + 1;
+                            goToPositionsCache[programPos] = loopEndPosition;
+                            goToPositionsCache[loopEndPosition] = programPos;
                         }
-                        programPos = loopEndPosition - 1;
+                        programPos = loopEndPosition;
                     }
                     else {
-                        if (goToPositionsCache[programPos] == 0) {
+                        if (goToPositionsCache[programPos] < 0) {
                             encounteredLoopStarts[++currentLoopStartPosition] = programPos;
                         }
                     }
-                    programPos++;
-                    continue;
+                    break;
                 case LoopEndCommand:
-                    var loopStartPosition = goToPositionsCache[programPos] - 1;
+                    var loopStartPosition = goToPositionsCache[programPos];
                     if (loopStartPosition < 0) {
                         loopStartPosition = encounteredLoopStarts[currentLoopStartPosition--];
-                        goToPositionsCache[programPos] = loopStartPosition + 1;
-                        goToPositionsCache[loopStartPosition] = programPos + 1;
+                        goToPositionsCache[programPos] = loopStartPosition;
+                        goToPositionsCache[loopStartPosition] = programPos;
                     }
                     if (memoryCells[currentCell] != 0) {
                         programPos = loopStartPosition;
                     }
-                    programPos++;
-                    continue;
+                    break;
             }
             programPos++;
         }
