@@ -1,4 +1,5 @@
 global using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Text;
 
 namespace BrainfuckInterpreter.UnitTest;
 
@@ -55,5 +56,18 @@ public class BrainfuckInterpreterTest
         outputStream.Flush();
         memoryStream.Position = 0;
         Assert.AreEqual("funny", new StreamReader(memoryStream).ReadToEnd());
+    }
+
+    [TestMethod]
+    public void AddNumbersTest()
+    {
+        var program = ">+>>>++++++++++>>>,>++++++[<-------->-],>++++++[<-------->-]<[<+>-]<[<+<<<+>>>>-]<<<<[->-[>]<<]<[>++++++[<++++++++>-]<.>++++++[<-------->-]<->>>>>>++++++[<++++++>-]<++.<<<<<]<[-<>>>>>>>++++++[<++++++++>-]<.<<<<<<]";
+        var intpuStream = new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("98")));
+        var memoryStream = new MemoryStream(12);
+        var outputStream = new StreamWriter(memoryStream);
+        Interpreter?.Interpret(program, intpuStream, outputStream);
+        outputStream.Flush();
+        memoryStream.Position = 0;
+        Assert.AreEqual("17", new StreamReader(memoryStream).ReadToEnd());
     }
 }

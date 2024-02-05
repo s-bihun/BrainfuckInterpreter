@@ -46,15 +46,16 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
                     if (memoryCells[currentCell] == 0) {
                         var loopEndPosition = goToPositionsCache[programPos] - 1;
                         if (loopEndPosition < 0) {
-                            loopEndPosition = FindNextCommandAfterLoopPositionShifted(programCode, programPos);
+                            loopEndPosition = FindLoopEndPosition(programCode, programPos);
                             goToPositionsCache[programPos] = loopEndPosition + 1;
                             goToPositionsCache[loopEndPosition] = programPos + 1;
                         }
                         programPos = loopEndPosition - 1;
                     }
                     else {
-                        currentLoopStartPosition++;
-                        encounteredLoopStarts[currentLoopStartPosition] = programPos;
+                        if (goToPositionsCache[programPos] == 0) {
+                            encounteredLoopStarts[++currentLoopStartPosition] = programPos;
+                        }
                     }
                     programPos++;
                     continue;
@@ -81,7 +82,7 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
     /// <param name="code">Brainfuck code.</param>
     /// <param name="position">Current position (expected start of the loop).</param>
     /// <returns>Position of the next command after the loop.</returns>
-    private static int FindNextCommandAfterLoopPositionShifted(string code, int position) {
+    private static int FindLoopEndPosition(string code, int position) {
         var matchingBracket = LoopEndCommand;
         var opposingBracket = LoopStartCommand;
         int counter = 1;
@@ -90,6 +91,6 @@ public class BrainfuckOptimizedInterpreter : BrainfuckInterpreterBase {
             if (code[position] == opposingBracket) { counter++; continue; }
             if (code[position] == matchingBracket) counter--;
         } while (!(counter == 0 && code[position] == matchingBracket));
-        return position + 1;
+        return position;
     }
 }

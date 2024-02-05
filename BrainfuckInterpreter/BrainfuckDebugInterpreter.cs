@@ -8,7 +8,12 @@ namespace BrainfuckInterpreter;
 /// Supports only single-threaded usage.
 /// </summary>
 public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
+    #region Constants
+
     private const int StopEachExecutedCommandCount = 1000;
+    private const int ShowMemoryCellsBothSidesDefault = 10;
+
+    #endregion
 
     #region Regexes
 
@@ -37,7 +42,7 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
 
     /// <inheritdoc/>
     public override void Interpret(string programCode, StreamReader input, StreamWriter output) {
-        int commandsExecutedCounter = -1;
+        int commandsExecutedCounter = 0;
         Input = input;
         Output = output;
         var programOutput = new StringBuilder();
@@ -52,13 +57,6 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         Position = 0;
         var previousPosition = -1;
         while (Position < StrippedCode.Length) {
-            commandsExecutedCounter++;
-            if (commandsExecutedCounter >= StopEachExecutedCommandCount) {
-                commandsExecutedCounter = 0;
-                Output.WriteLine($"Check if there'is no endless loop and continue by pressing Enter (occurs each {StopEachExecutedCommandCount} executed commands)...");
-                Output.Flush();
-                Input.ReadLine();
-            }
             if ((previousPosition < 0 && PosToLnCol[Position].Item1 != 0) || (PosToLnCol[previousPosition].Item1 != PosToLnCol[Position].Item1)) {
                 WriteCommentsForLines(previousPosition < 0 ? 0 : PosToLnCol[previousPosition].Item1, PosToLnCol[Position].Item1);
             }
@@ -83,7 +81,13 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
                     programOutput.Append((char)MemoryCells[CurrentCell]);
                     break;
                 case InputCommand:
-                    MemoryCells[CurrentCell] = (byte)(Input.ReadLine()?.First() ?? '\n');
+                    WriteDebugMessage(false);
+                    try {
+                        MemoryCells[CurrentCell] = (byte)(Input.ReadLine()?.First() ?? '\n');
+                    }
+                    catch (InvalidOperationException) {
+                        MemoryCells[CurrentCell] = (byte)'\n';
+                    }
                     break;
                 case LoopStartCommand:
                     WriteDebugMessage();
@@ -97,12 +101,13 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
                         previousPosition = Position;
                     }
                     else {
-                        currentLoopStartPosition++;
-                        if (foundLoopStartPositions.Count <= currentLoopStartPosition) {
-                            foundLoopStartPositions.Add(Position);
-                        }
-                        else {
-                            foundLoopStartPositions[currentLoopStartPosition] = Position;
+                        if (!foundGoToPositions.ContainsKey(Position)) { // do not add start of the loop to foundLoopStartPositions if we're entering loop in the other loop iteration
+                            if (foundLoopStartPositions.Count <= ++currentLoopStartPosition) {
+                                foundLoopStartPositions.Add(Position);
+                            }
+                            else {
+                                foundLoopStartPositions[currentLoopStartPosition] = Position;
+                            }
                         }
                     }
                     Position++;
@@ -125,8 +130,22 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
             }
             WriteDebugMessage();
             Position++;
+
+            commandsExecutedCounter++;
+            if (commandsExecutedCounter % StopEachExecutedCommandCount == 0 && IsWriteDebug) {
+                Output.WriteLine($"Check if there'is no endless loop and continue by pressing Enter (occurs each {StopEachExecutedCommandCount} executed commands)...");
+                Output.Flush();
+                Input.ReadLine();
+            }
         }
         WriteCommentsForLines(PosToLnCol[previousPosition].Item1, CommentsByLn.Keys.Max() + 1);
+        Output.WriteLine();
+        Output.WriteLine($"Total program length:    {Position,10}");
+        Output.WriteLine($"Total commands executed: {commandsExecutedCounter,10}");
+        Output.WriteLine($"Total memory cells used: {MemoryCells.Count,10}");
+        Output.WriteLine($"Memory content:");
+        IsWriteDebug = true;
+        WriteMemoryCells();
         Output.WriteLine();
         Output.WriteLine("Program output:");
         Output.WriteLine(programOutput.ToString());
@@ -147,13 +166,14 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         return position;
     }
     
-    private void WriteDebugMessage() {
+    private void WriteDebugMessage(bool includeCurrentCellValue = true) {
         if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
         if (PosToLnCol == null) throw new InvalidOperationException($"{nameof(PosToLnCol)} can't be null.");
         if (StrippedCode == null) throw new InvalidOperationException($"{nameof(StrippedCode)} can't be null.");
         if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
 
-        if (IsWriteDebug) Output.WriteLine($"code[{PosToLnCol[Position].Item1, 3}, {PosToLnCol[Position].Item2, 3}]: {StrippedCode[Position]} | cell[{CurrentCell,3}] = {(int)MemoryCells[CurrentCell],5} ({ConvertToPrintable(MemoryCells[CurrentCell])})");
+        var currentCellValue = includeCurrentCellValue ? $" | cell[{CurrentCell,3}] = {(int)MemoryCells[CurrentCell],5} ({ConvertToPrintable(MemoryCells[CurrentCell])})" : string.Empty;
+        if (IsWriteDebug) Output.WriteLine($"code[{PosToLnCol[Position].Item1, 3}, {PosToLnCol[Position].Item2, 3}]: {StrippedCode[Position]}{currentCellValue}");
         Output.Flush();
     }
 
@@ -193,7 +213,7 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
                     }
                 }
             }
-            WriteComment(comment);
+            WriteComment(comment, ShowMemoryCellsBothSidesDefault);
             if (StopDebuggingRegex.IsMatch(comment)) {
                 lastStopDebuggingPos = StopDebuggingRegex.Matches(comment).Max(x => x.Captures.Max(y => y.Index));
             }
@@ -231,21 +251,31 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         }
     }
 
-    private void WriteComment(string comment) {
+    private void WriteComment(string comment, int showMemoryCellsBothSides = -1) {
         if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
 
         if (IsWriteDebug) Output.WriteLine($"{comment}");
-        WriteMemoryCells();
+        WriteMemoryCells(showMemoryCellsBothSides);
         Output.Flush();
     }
 
-    private void WriteMemoryCells() {
+    private void WriteMemoryCells(int showMemoryCellsBothSides = -1) {
         if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
         if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
 
         if (!IsWriteDebug) return;
-        Output.WriteLine($"|{string.Join("|", Enumerable.Range(0, MemoryCells.Count).Select(x => x == CurrentCell ? @"\\/\/\/" : $" {x,5} "))}|");
-        Output.WriteLine($"| {string.Join(" | ", MemoryCells.Select(x => $"{(int)x,5}"))} |");
-        Output.WriteLine($"|   {string.Join("   |   ", MemoryCells.Select(ConvertToPrintable))}   |");
+        var showCellFrom = 0;
+        var showCellCount = MemoryCells.Count;
+        if (showMemoryCellsBothSides >= 0) {
+            showCellFrom = Math.Max(CurrentCell - showMemoryCellsBothSides, 0);
+            showCellCount = 2 * showMemoryCellsBothSides + 1;
+            if (showCellFrom + showCellCount > MemoryCells.Count) {
+                showCellCount = MemoryCells.Count - showCellFrom;
+            }
+        }
+        var cellsToShow = MemoryCells.Skip(showCellFrom).Take(showCellCount);
+        Output.WriteLine($"|{string.Join("|", Enumerable.Range(showCellFrom, showCellCount).Select(x => x == CurrentCell ? @"\\/\/\/" : $" {x,5} "))}|");
+        Output.WriteLine($"| {string.Join(" | ", cellsToShow.Select(x => $"{(int)x,5}"))} |");
+        Output.WriteLine($"|   {string.Join("   |   ", cellsToShow.Select(ConvertToPrintable))}   |");
     }
 }

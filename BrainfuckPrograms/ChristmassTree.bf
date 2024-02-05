@@ -1,8 +1,6 @@
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ; somehow it reads negative memory cells (it's a temporary fix). Also it seem to break my debugger, let's take a look some time.
-
-; taken from https://seblink.wordpress.com/2013/12/17/christmas-the-brainfuck-way/
-; though, it works for example with this compiler: https://sange.fi/esoteric/brainfuck/impl/interp/i.html though it seems to be not affected by the input parameter
-
+; code from an article https://seblink.wordpress.com/2013/12/17/christmas-the-brainfuck-way/
+; it takes an integer representaion of a char as a parameter, not an ideal solution because difference between inputs '0' and '9' is small. But when '\t' or '\n' is inputed there's much smaller tree. '}' is the larghest tree.
+; {STOP_DEBUGGING}
 >>>>>,>++<<<<<<>[-]>[-]>[-]>[-]>[<<<<+>>>>-]<<<<[>>>>>[
 <<<<+>+>>>-]<<<[>>>+<<<-]<[>+<<-[>>[-]>+<<<-]>>>[<<<+>>
 >-]<[<-[>>>-<<<[-]]+>-]<-]>>>+<<<<]>>>>>>+<<>>>+++++++[
