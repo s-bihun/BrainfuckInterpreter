@@ -133,6 +133,7 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
 
             commandsExecutedCounter++;
             if (commandsExecutedCounter % StopEachExecutedCommandCount == 0 && IsWriteDebug) {
+                Output.WriteLine($"Current output:\n{programOutput}");
                 Output.WriteLine($"Check if there'is no endless loop and continue by pressing Enter (occurs each {StopEachExecutedCommandCount} executed commands)...");
                 Output.Flush();
                 Input.ReadLine();
