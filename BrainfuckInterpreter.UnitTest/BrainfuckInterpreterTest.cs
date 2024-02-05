@@ -70,4 +70,17 @@ public class BrainfuckInterpreterTest
         memoryStream.Position = 0;
         Assert.AreEqual("17", new StreamReader(memoryStream).ReadToEnd());
     }
+
+    [TestMethod]
+    public void BubbleSortTest()
+    {
+        var program = ">>,[>>,]<<[[<<]>>>>[<<[>+<<+>-]>>[>+<<<<[->]>[<]>>-]<<<[[-]>>[>+<-]>>[<<<+>>>-]]>>[[<+>-]>>]<]<<[>>+<<-]<<]>>>>[.>>]";
+        var intpuStream = new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("3815024967\0")));
+        var memoryStream = new MemoryStream(12);
+        var outputStream = new StreamWriter(memoryStream);
+        Interpreter?.Interpret(program, intpuStream, outputStream);
+        outputStream.Flush();
+        memoryStream.Position = 0;
+        Assert.AreEqual("0123456789", new StreamReader(memoryStream).ReadToEnd());
+    }
 }
