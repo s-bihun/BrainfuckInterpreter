@@ -139,7 +139,7 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
                 Input.ReadLine();
             }
         }
-        WriteCommentsForLines(PosToLnCol[previousPosition].Item1, CommentsByLn.Keys.Max() + 1);
+        WriteCommentsForLines(PosToLnCol[previousPosition].Item1, (CommentsByLn.Keys.Any() ? CommentsByLn.Keys.Max() : 0) + 1);
         Output.WriteLine();
         Output.WriteLine($"Total program length:    {Position,10}");
         Output.WriteLine($"Total commands executed: {commandsExecutedCounter,10}");
