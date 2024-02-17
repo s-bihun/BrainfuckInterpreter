@@ -149,7 +149,7 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         WriteMemoryCells();
         Output.WriteLine();
         Output.WriteLine("Program output:");
-        Output.WriteLine(programOutput.ToString());
+        Output.Write(programOutput.ToString());
     }
 
     private static char ConvertToPrintable(byte c) => c < 32 || c == 255 ? '' : (char)c;
@@ -173,9 +173,11 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
         if (StrippedCode == null) throw new InvalidOperationException($"{nameof(StrippedCode)} can't be null.");
         if (MemoryCells == null) throw new InvalidOperationException($"{nameof(MemoryCells)} can't be null.");
 
-        var currentCellValue = includeCurrentCellValue ? $" | cell[{CurrentCell,3}] = {(int)MemoryCells[CurrentCell],5} ({ConvertToPrintable(MemoryCells[CurrentCell])})" : string.Empty;
-        if (IsWriteDebug) Output.WriteLine($"code[{PosToLnCol[Position].Item1, 3}, {PosToLnCol[Position].Item2, 3}]: {StrippedCode[Position]}{currentCellValue}");
-        Output.Flush();
+        if (IsWriteDebug) {
+            var currentCellValue = includeCurrentCellValue ? $" | cell[{CurrentCell,3}] = {(int)MemoryCells[CurrentCell],5} ({ConvertToPrintable(MemoryCells[CurrentCell])})" : string.Empty;
+            Output.WriteLine($"code[{PosToLnCol[Position].Item1, 3}, {PosToLnCol[Position].Item2, 3}]: {StrippedCode[Position]}{currentCellValue}");
+            Output.Flush();
+        }
     }
 
     private IList<string> GetComments(int fromLn, int toLn) {
@@ -255,9 +257,11 @@ public class BrainfuckDebugInterpreter : BrainfuckInterpreterBase {
     private void WriteComment(string comment, int showMemoryCellsBothSides = -1) {
         if (Output == null) throw new InvalidOperationException($"{nameof(Output)} can't be null.");
 
-        if (IsWriteDebug) Output.WriteLine($"{comment}");
-        WriteMemoryCells(showMemoryCellsBothSides);
-        Output.Flush();
+        if (IsWriteDebug) {
+            Output.WriteLine($"{comment}");
+            WriteMemoryCells(showMemoryCellsBothSides);
+            Output.Flush();
+        }
     }
 
     private void WriteMemoryCells(int showMemoryCellsBothSides = -1) {
